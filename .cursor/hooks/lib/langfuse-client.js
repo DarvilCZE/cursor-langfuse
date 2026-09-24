@@ -376,7 +376,7 @@ export async function traceHookEvent(input, handleEvent) {
     };
     const traceName = truncatePropagated(resolveTraceName(input)) || "Cursor";
     const sessionId = truncatePropagated(
-      generateSessionId(input.workspace_roots)
+      generateSessionId(input.workspace_roots, input.conversation_id)
     );
     const userId = truncatePropagated(input.user_email);
     const version = truncatePropagated(input.cursor_version);

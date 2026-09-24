@@ -59,22 +59,28 @@ export function generateTraceName(prompt, model) {
 }
 
 /**
- * Generate a session ID from workspace roots
- * Groups all conversations in the same workspace together
+ * Generate a session ID from the workspace and conversation.
  * @param {string[]} workspaceRoots - Array of workspace root paths
+ * @param {string} [conversationId] - Cursor conversation id
  * @returns {string} Session ID
  */
-export function generateSessionId(workspaceRoots) {
+export function generateSessionId(workspaceRoots, conversationId) {
+  let sessionId;
   if (!workspaceRoots || workspaceRoots.length === 0) {
-    return 'cursor-default-session';
+    sessionId = 'cursor-default-session';
+  } else {
+    // Use the first workspace root as the session identifier.
+    // Extract just the folder name for cleaner session names.
+    const root = workspaceRoots[0];
+    const folderName = root.split('/').pop() || root;
+    sessionId = `cursor-${folderName}`;
   }
-  
-  // Use the first workspace root as the session identifier
-  // Extract just the folder name for cleaner session names
-  const root = workspaceRoots[0];
-  const folderName = root.split('/').pop() || root;
-  
-  return `cursor-${folderName}`;
+
+  if (conversationId) {
+    sessionId += `-${conversationId}`;
+  }
+
+  return sessionId;
 }
 
 /**

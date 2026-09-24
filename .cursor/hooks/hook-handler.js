@@ -8,7 +8,7 @@
  * Features:
  * - All 12 Cursor hooks supported (Agent + Tab)
  * - Traces grouped by conversation_id
- * - Sessions grouped by workspace
+ * - Sessions grouped by workspace and conversation id
  * - Dynamic tags based on activity
  * - Completion scores and efficiency metrics
  * - Rich metadata and edit statistics

@@ -10,7 +10,7 @@ This project enables automatic tracing of Cursor AI agent activity to Langfuse. 
 
 - **Full Hook Coverage**: Supports all 12 Cursor hooks (Agent and Tab modes)
 - **Conversation Tracing**: Traces grouped by `conversation_id` for complete session visibility
-- **Workspace Sessions**: Sessions grouped by workspace for easy filtering
+- **Workspace Sessions**: Sessions grouped by workspace and conversation id for easy filtering
 - **Dynamic Tags**: Automatic tagging based on activity type (shell, mcp, file-ops, thinking, etc.)
 - **Completion Scores**: Tracks agent completion status and efficiency metrics
 - **Rich Metadata**: Captures edit statistics, durations, file types, and more
@@ -98,7 +98,7 @@ The handler uses the Langfuse JS SDK v5 (`@langfuse/tracing`, `@langfuse/otel`, 
 
 - **Trace**: One per conversation. The trace id is a deterministic hash of `conversation_id`
 - **Root observation**: Holds the conversation input and output. Later hook processes reuse the same root span id
-- **Session**: Grouped by workspace folder name and copied onto every observation
+- **Session**: Grouped by workspace folder name and conversation id, and copied onto every observation
 - **Generations**: User prompts and agent responses. Response generations include token usage
 - **Spans**: File operations, shell commands, MCP calls, thinking
 - **Events**: Session completion markers
@@ -137,7 +137,7 @@ Traces are automatically tagged based on activity:
 
 1. Log in to your Langfuse dashboard
 2. Navigate to Traces
-3. Filter by session (workspace name) or tags
+3. Filter by session (workspace name and conversation id) or tags
 4. Click on a trace to see the full conversation with all spans
 
 ## Troubleshooting

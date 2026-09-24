@@ -102,7 +102,7 @@ test("session observations carry root input/output and propagated session attrib
   for (const root of rootExports) {
     assert.equal(root.parentSpanContext, undefined);
     assert.equal(root.attributes["langfuse.internal.is_app_root"], true);
-    assert.equal(root.attributes["session.id"], "cursor-demo-workspace");
+    assert.equal(root.attributes["session.id"], "cursor-demo-workspace-conv-session-1");
     assert.equal(root.attributes["user.id"], "dev@example.com");
     assert.equal(root.attributes["langfuse.version"], "1.2.3");
     assert.equal(
@@ -126,7 +126,7 @@ test("session observations carry root input/output and propagated session attrib
   assert.ok(generation);
   assert.equal(generation.parentSpanContext?.spanId, rootSpanId);
   assert.equal(generation.attributes["langfuse.observation.type"], "generation");
-  assert.equal(generation.attributes["session.id"], "cursor-demo-workspace");
+  assert.equal(generation.attributes["session.id"], "cursor-demo-workspace-conv-session-1");
   assert.equal(generation.attributes["user.id"], "dev@example.com");
   assert.equal(generation.attributes["langfuse.version"], "1.2.3");
   assert.notEqual(generation.attributes["langfuse.internal.is_app_root"], true);
@@ -146,13 +146,13 @@ test("session observations carry root input/output and propagated session attrib
   assert.ok(userPrompt);
   assert.equal(userPrompt.parentSpanContext?.spanId, rootSpanId);
   assert.equal(attachment.parentSpanContext?.spanId, userPrompt.spanContext().spanId);
-  assert.equal(attachment.attributes["session.id"], "cursor-demo-workspace");
+  assert.equal(attachment.attributes["session.id"], "cursor-demo-workspace-conv-session-1");
 
   const shell = spans.find((span) => span.name.startsWith("Shell Result:"));
   assert.ok(shell);
   assert.equal(shell.parentSpanContext?.spanId, rootSpanId);
   assert.equal(shell.attributes["langfuse.observation.level"], "WARNING");
-  assert.equal(shell.attributes["session.id"], "cursor-demo-workspace");
+  assert.equal(shell.attributes["session.id"], "cursor-demo-workspace-conv-session-1");
 
   const stopped = spans.find((span) => span.name === "Agent Stopped");
   assert.ok(stopped);
@@ -161,7 +161,7 @@ test("session observations carry root input/output and propagated session attrib
     stopped.attributes["langfuse.trace.tags"].includes("status-completed")
   );
   assert.ok(stopped.attributes["langfuse.trace.tags"].includes("cursor"));
-  assert.equal(stopped.attributes["session.id"], "cursor-demo-workspace");
+  assert.equal(stopped.attributes["session.id"], "cursor-demo-workspace-conv-session-1");
 
   const scores = getRecordedScoresForTests().filter(
     (score) => score.traceId === traceId
