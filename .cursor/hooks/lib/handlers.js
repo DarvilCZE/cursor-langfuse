@@ -55,16 +55,29 @@ export function handleAfterAgentResponse(trace, input) {
   const responseLength = input.text?.length || 0;
   const lineCount = input.text?.split("\n").length || 0;
 
+  const inputTokens = input.input_tokens ?? 0;
+  const outputTokens = input.output_tokens ?? 0;
+  const cacheReadTokens = input.cache_read_tokens ?? 0;
+  const cacheWriteTokens = input.cache_write_tokens ?? 0;
+
   trace.update({ output: input.text });
 
   trace.generation({
     name: "Agent Response",
     output: input.text,
     model: input.model,
+    usageDetails: {
+      input: inputTokens,
+      output: outputTokens,
+      cache_read_input_tokens: cacheReadTokens,
+      cache_creation_input_tokens: cacheWriteTokens,
+    },
     metadata: {
       generation_id: input.generation_id,
       response_length: responseLength,
       line_count: lineCount,
+      cache_read_tokens: cacheReadTokens,
+      cache_write_tokens: cacheWriteTokens,
     },
   });
 
@@ -182,7 +195,10 @@ export function handleBeforeReadFile(trace, input) {
     .span({
       name: `Read: ${input.file_path?.split("/").pop() || "file"}`,
       input: { file_path: input.file_path, extension },
-      metadata: { generation_id: input.generation_id, file_extension: extension },
+      metadata: {
+        generation_id: input.generation_id,
+        file_extension: extension,
+      },
     })
     .end();
 
@@ -206,7 +222,11 @@ export function handleAfterFileEdit(trace, input) {
         net_change: editStats.netChange,
         edits: input.edits,
       },
-      metadata: { generation_id: input.generation_id, file_extension: extension, ...editStats },
+      metadata: {
+        generation_id: input.generation_id,
+        file_extension: extension,
+        ...editStats,
+      },
     })
     .end();
 
@@ -240,7 +260,11 @@ export function handleBeforeTabFileRead(trace, input) {
     .span({
       name: `Tab Read: ${fileName}`,
       input: { file_path: input.file_path, extension },
-      metadata: { generation_id: input.generation_id, file_extension: extension, source: "tab" },
+      metadata: {
+        generation_id: input.generation_id,
+        file_extension: extension,
+        source: "tab",
+      },
     })
     .end();
 
