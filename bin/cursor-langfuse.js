@@ -1,0 +1,63 @@
+#!/usr/bin/env node
+
+/**
+ * Cursor Hooks Langfuse Integration
+ * 
+ * CLI entry point. Cursor invokes this command from hooks.json.
+ * 
+ * Features:
+ * - All 12 Cursor hooks supported (Agent + Tab)
+ * - Traces grouped by conversation_id
+ * - Sessions grouped by workspace and conversation id
+ * - Dynamic tags based on activity
+ * - Completion scores and efficiency metrics
+ * - Rich metadata and edit statistics
+ * 
+ * @version 1.2.0
+ * @see https://cursor.com/docs/agent/hooks
+ * @see https://langfuse.com/docs
+ */
+
+import { readStdin } from '../src/utils.js';
+import { 
+  traceHookEvent,
+  shutdownLangfuse,
+  HOOK_HANDLER_VERSION,
+} from '../src/langfuse-client.js';
+import { routeHookHandler } from '../src/handlers.js';
+
+/**
+ * Main handler function
+ * Reads hook data from stdin, records the Langfuse observation, and routes to handler
+ */
+async function main() {
+  let exitCode = 0;
+  try {
+    const input = await readStdin();
+    const response = await traceHookEvent(input, (trace, event) =>
+      routeHookHandler(event.hook_event_name, trace, event)
+    );
+
+    if (response !== null && response !== undefined) {
+      console.log(JSON.stringify(response));
+    }
+  } catch (error) {
+    console.error(`[Langfuse Hook v${HOOK_HANDLER_VERSION}] Error: ${error.message}`);
+    console.log(JSON.stringify({
+      continue: true,
+      permission: 'allow'
+    }));
+    exitCode = 1;
+  } finally {
+    try {
+      await shutdownLangfuse();
+    } catch (flushError) {
+      console.error(`[Langfuse Hook v${HOOK_HANDLER_VERSION}] Flush error: ${flushError.message}`);
+    }
+  }
+
+  process.exit(exitCode);
+}
+
+// Run the main function
+main();

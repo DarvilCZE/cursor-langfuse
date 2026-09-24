@@ -1,0 +1,30 @@
+{
+  "name": "cursor-langfuse",
+  "version": "1.2.0",
+  "description": "CLI that records Cursor hook events as Langfuse traces",
+  "type": "module",
+  "bin": {
+    "cursor-langfuse": "./bin/cursor-langfuse.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "examples"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@langfuse/client": "^5.11.1",
+    "@langfuse/otel": "^5.11.1",
+    "@langfuse/tracing": "^5.11.1",
+    "@opentelemetry/sdk-node": "^0.222.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@opentelemetry/sdk-trace-base": "^2.8.0"
+  }
+}

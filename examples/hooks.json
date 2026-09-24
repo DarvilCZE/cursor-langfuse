@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeSubmitPrompt": [{ "command": "./node_modules/.bin/cursor-langfuse" }],
+    "afterAgentResponse": [{ "command": "./node_modules/.bin/cursor-langfuse" }],
+    "afterAgentThought": [{ "command": "./node_modules/.bin/cursor-langfuse" }],
+    "beforeShellExecution": [{ "command": "./node_modules/.bin/cursor-langfuse" }],
+    "afterShellExecution": [{ "command": "./node_modules/.bin/cursor-langfuse" }],
+    "beforeMCPExecution": [{ "command": "./node_modules/.bin/cursor-langfuse" }],
+    "afterMCPExecution": [{ "command": "./node_modules/.bin/cursor-langfuse" }],
+    "beforeReadFile": [{ "command": "./node_modules/.bin/cursor-langfuse" }],
+    "afterFileEdit": [{ "command": "./node_modules/.bin/cursor-langfuse" }],
+    "stop": [{ "command": "./node_modules/.bin/cursor-langfuse" }],
+    "beforeTabFileRead": [{ "command": "./node_modules/.bin/cursor-langfuse" }],
+    "afterTabFileEdit": [{ "command": "./node_modules/.bin/cursor-langfuse" }]
+  }
+}

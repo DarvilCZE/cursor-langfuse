@@ -1,10 +1,10 @@
-# Cursor Langfuse Integration
+# Cursor Langfuse
 
-A Cursor hooks integration that sends traces to Langfuse for observability and debugging of AI coding sessions.
+A CLI that records Cursor hook events as Langfuse traces.
 
 ## Overview
 
-This project enables automatic tracing of Cursor AI agent activity to Langfuse. Every prompt, response, file edit, shell command, and MCP tool call is captured and sent to Langfuse for analysis.
+Install `cursor-langfuse`, then point the hooks you care about at that command. Each prompt, response, file edit, shell command, and MCP tool call you wire up is captured and sent to Langfuse.
 
 ## Features
 
@@ -35,16 +35,15 @@ This project enables automatic tracing of Cursor AI agent activity to Langfuse. 
 
 ## Installation
 
-1. Clone or copy this repository to your project directory.
-
-2. Install dependencies:
+Install the package in the project you want to trace:
 
 ```bash
-cd .cursor/hooks
-npm install
+npm install github:DarvilCZE/cursor-langfuse
 ```
 
-3. Create a `.env` file in your project root with your Langfuse credentials:
+After the package is published, `npm install cursor-langfuse` is the same install.
+
+Create a `.env` file in that project root:
 
 ```env
 LANGFUSE_SECRET_KEY=sk-lf-...
@@ -52,7 +51,32 @@ LANGFUSE_PUBLIC_KEY=pk-lf-...
 LANGFUSE_BASE_URL=https://cloud.langfuse.com
 ```
 
-4. The hooks configuration (`.cursor/hooks.json`) is already set up to route all hooks through the handler.
+Register the command in your own hooks file. Project hooks live in `.cursor/hooks.json` and run from the project root. User hooks live in `~/.cursor/hooks.json` and run from `~/.cursor/`.
+
+Cursor resolves the command the same way a shell would. A project install does not put the binary on `PATH`, so point project hooks at the local bin:
+
+```json
+{
+  "version": 1,
+  "hooks": {
+    "beforeSubmitPrompt": [
+      { "command": "./node_modules/.bin/cursor-langfuse" }
+    ],
+    "afterAgentResponse": [
+      { "command": "./node_modules/.bin/cursor-langfuse" }
+    ],
+    "stop": [
+      { "command": "./node_modules/.bin/cursor-langfuse" }
+    ]
+  }
+}
+```
+
+Use `cursor-langfuse` as the command after a global install (`npm install -g cursor-langfuse`), which is the usual setup for user-level hooks. A full example covering every supported event is in [`examples/hooks.json`](examples/hooks.json). Omit any event you do not want to record.
+
+The CLI reads the hook payload from stdin, prints the hook response on stdout, and loads `.env` from the working directory. It fails open: errors are logged to stderr and Cursor is allowed to continue.
+
+This repository still contains `.cursor/hooks.json` wired to the previous in-tree handler, so tracing keeps running here. That file is local configuration, not part of the package you install.
 
 ## Configuration
 
@@ -67,25 +91,10 @@ LANGFUSE_BASE_URL=https://cloud.langfuse.com
 | `LANGFUSE_TRACING_ENVIRONMENT`  | No       | Langfuse environment, when you want one                     |
 | `CURSOR_LANGFUSE_STATE_DIR`     | No       | Directory for the local root input/output cache             |
 
-### Hooks Configuration
-
-The `.cursor/hooks.json` file registers the hook handler for all supported events:
-
-```json
-{
-  "version": 1,
-  "hooks": {
-    "beforeSubmitPrompt": [{ "command": "node .cursor/hooks/hook-handler.js" }],
-    "afterAgentResponse": [{ "command": "node .cursor/hooks/hook-handler.js" }],
-    ...
-  }
-}
-```
-
 ## How It Works
 
-1. Cursor triggers a hook event and passes JSON data via stdin
-2. The hook handler reads and parses the input
+1. Cursor triggers a hook event and passes JSON data via stdin to `cursor-langfuse`
+2. The CLI reads and parses the input
 3. The `conversation_id` is hashed into a deterministic Langfuse trace id, and the event is recorded on that conversation's root observation
 4. Session, user, version, tags, and metadata are propagated before any observation is created, so they are present on the root and on every child, including generations that carry token usage
 5. The appropriate handler records spans, generations, and events under that root. Overall prompt and response text are stored on the root observation
@@ -122,15 +131,12 @@ Traces are automatically tagged based on activity:
 ## Project Structure
 
 ```
-.cursor/
-  hooks.json              # Cursor hooks configuration
-  hooks/
-    hook-handler.js       # Main entry point
-    package.json          # Dependencies
-    lib/
-      langfuse-client.js  # Langfuse SDK wrapper
-      handlers.js         # Hook-specific handlers
-      utils.js            # Utility functions
+bin/cursor-langfuse.js    # CLI entry point
+src/
+  langfuse-client.js      # Langfuse SDK wrapper
+  handlers.js             # Hook-specific handlers
+  utils.js                # Utility functions
+examples/hooks.json       # Sample hooks file to copy
 ```
 
 ## Viewing Traces
@@ -144,7 +150,7 @@ Traces are automatically tagged based on activity:
 
 ### Traces not appearing in Langfuse
 
-- Verify your `.env` file exists in the project root
+- Verify your `.env` file exists in the directory Cursor uses as the hook working directory (the project root for project hooks)
 - Check that `LANGFUSE_SECRET_KEY` and `LANGFUSE_PUBLIC_KEY` are set correctly
 - Look for error messages in Cursor's developer console or the hook's stderr (`Flush error`)
 
