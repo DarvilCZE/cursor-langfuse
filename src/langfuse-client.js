@@ -19,8 +19,7 @@
 import { randomBytes } from "node:crypto";
 import { mkdir, open, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
-import { config } from "dotenv";
+import { join } from "node:path";
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { LangfuseSpanProcessor } from "@langfuse/otel";
 import { LangfuseClient } from "@langfuse/client";
@@ -30,8 +29,6 @@ import {
   startActiveObservation,
 } from "@langfuse/tracing";
 import { generateSessionId, generateTags, generateTraceName } from "./utils.js";
-
-config({ path: resolve(process.cwd(), ".env") });
 
 export const HOOK_HANDLER_VERSION = "1.2.0";
 

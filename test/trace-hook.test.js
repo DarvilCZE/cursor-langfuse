@@ -246,6 +246,7 @@ test("hook sources do not call the legacy SDK or deprecated trace APIs", () => {
     readFileSync(join(packageRoot, "package.json"), "utf8")
   );
   assert.equal(packageJson.dependencies.langfuse, undefined);
+  assert.equal(packageJson.dependencies.dotenv, undefined);
   assert.equal(packageJson.bin["cursor-langfuse"], "./bin/cursor-langfuse.js");
   assert.match(packageJson.dependencies["@langfuse/tracing"], /^\^5\./);
   assert.equal(readdirSync(packageRoot).includes("package-lock.json"), true);

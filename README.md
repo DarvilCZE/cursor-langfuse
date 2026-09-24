@@ -35,66 +35,73 @@ Install `cursor-langfuse`, then point the hooks you care about at that command. 
 
 ## Installation
 
-Install the package in the project you want to trace:
+Install the CLI globally:
 
 ```bash
-npm install github:DarvilCZE/cursor-langfuse
+npm install -g github:DarvilCZE/cursor-langfuse
 ```
 
-After the package is published, `npm install cursor-langfuse` is the same install.
+After the package is published, `npm install -g cursor-langfuse` is the same install.
 
-Create a `.env` file in that project root:
+Save your Langfuse keys once. This writes `~/.config/cursor-langfuse/config.json` with permissions limited to your user:
 
-```env
-LANGFUSE_SECRET_KEY=sk-lf-...
-LANGFUSE_PUBLIC_KEY=pk-lf-...
-LANGFUSE_BASE_URL=https://cloud.langfuse.com
+```bash
+cursor-langfuse configure --secret-key sk-lf-... --public-key pk-lf-...
 ```
 
-Register the command in your own hooks file. Project hooks live in `.cursor/hooks.json` and run from the project root. User hooks live in `~/.cursor/hooks.json` and run from `~/.cursor/`.
+Omit the flags to be prompted. Add `--base-url https://your-host` for a self-hosted Langfuse. Pressing Enter for the base URL uses `https://cloud.langfuse.com`.
 
-Cursor resolves the command the same way a shell would. A project install does not put the binary on `PATH`, so point project hooks at the local bin:
+Register the command in your user hooks file, `~/.cursor/hooks.json`. User hooks run for every project. A full example is in [`examples/hooks.json`](examples/hooks.json). Omit any event you do not want to record:
 
 ```json
 {
   "version": 1,
   "hooks": {
-    "beforeSubmitPrompt": [
-      { "command": "./node_modules/.bin/cursor-langfuse" }
-    ],
-    "afterAgentResponse": [
-      { "command": "./node_modules/.bin/cursor-langfuse" }
-    ],
-    "stop": [
-      { "command": "./node_modules/.bin/cursor-langfuse" }
-    ]
+    "beforeSubmitPrompt": [{ "command": "cursor-langfuse" }],
+    "afterAgentResponse": [{ "command": "cursor-langfuse" }],
+    "stop": [{ "command": "cursor-langfuse" }]
   }
 }
 ```
 
-Use `cursor-langfuse` as the command after a global install (`npm install -g cursor-langfuse`), which is the usual setup for user-level hooks. A full example covering every supported event is in [`examples/hooks.json`](examples/hooks.json). Omit any event you do not want to record.
+Cursor resolves the command like a shell. If the hook reports that `cursor-langfuse` cannot be found, use the absolute path from `command -v cursor-langfuse`.
 
-The CLI reads the hook payload from stdin, prints the hook response on stdout, and loads `.env` from the working directory. It fails open: errors are logged to stderr and Cursor is allowed to continue.
+The CLI reads the hook payload from stdin and prints the hook response on stdout. It fails open: errors are logged to stderr and Cursor is allowed to continue.
 
 This repository still contains `.cursor/hooks.json` wired to the previous in-tree handler, so tracing keeps running here. That file is local configuration, not part of the package you install.
 
 ## Configuration
 
+Credentials live in `~/.config/cursor-langfuse/config.json`:
+
+```json
+{
+  "secretKey": "sk-lf-...",
+  "publicKey": "pk-lf-...",
+  "baseUrl": "https://cloud.langfuse.com"
+}
+```
+
+`baseUrl` is optional. Set `XDG_CONFIG_HOME` to move the config root, or `CURSOR_LANGFUSE_CONFIG` to point at a different file. Environment variables override the file when they are already set.
+
+One config file sends every workspace to the same Langfuse project. Sessions stay separate because each one includes the workspace name and the conversation id.
+
 ### Environment Variables
 
 | Variable              | Required | Description                                                 |
 | --------------------- | -------- | ----------------------------------------------------------- |
-| `LANGFUSE_SECRET_KEY`           | Yes      | Your Langfuse secret key                                    |
-| `LANGFUSE_PUBLIC_KEY`           | Yes      | Your Langfuse public key                                    |
-| `LANGFUSE_BASE_URL`             | No       | Langfuse API URL (defaults to `https://cloud.langfuse.com`) |
+| `LANGFUSE_SECRET_KEY`           | No       | Overrides `secretKey` from the config file                  |
+| `LANGFUSE_PUBLIC_KEY`           | No       | Overrides `publicKey` from the config file                  |
+| `LANGFUSE_BASE_URL`             | No       | Overrides `baseUrl` from the config file                    |
 | `LANGFUSE_RELEASE`              | No       | Release stamped on observations (defaults to the hook handler version) |
 | `LANGFUSE_TRACING_ENVIRONMENT`  | No       | Langfuse environment, when you want one                     |
 | `CURSOR_LANGFUSE_STATE_DIR`     | No       | Directory for the local root input/output cache             |
+| `CURSOR_LANGFUSE_CONFIG`        | No       | Path to the credentials file (defaults to `~/.config/cursor-langfuse/config.json`) |
 
 ## How It Works
 
 1. Cursor triggers a hook event and passes JSON data via stdin to `cursor-langfuse`
-2. The CLI reads and parses the input
+2. The CLI loads credentials from the user config file, then reads and parses the input
 3. The `conversation_id` is hashed into a deterministic Langfuse trace id, and the event is recorded on that conversation's root observation
 4. Session, user, version, tags, and metadata are propagated before any observation is created, so they are present on the root and on every child, including generations that carry token usage
 5. The appropriate handler records spans, generations, and events under that root. Overall prompt and response text are stored on the root observation
@@ -136,7 +143,7 @@ src/
   langfuse-client.js      # Langfuse SDK wrapper
   handlers.js             # Hook-specific handlers
   utils.js                # Utility functions
-examples/hooks.json       # Sample hooks file to copy
+examples/hooks.json       # Sample user hooks file (~/.cursor/hooks.json)
 ```
 
 ## Viewing Traces
@@ -150,8 +157,8 @@ examples/hooks.json       # Sample hooks file to copy
 
 ### Traces not appearing in Langfuse
 
-- Verify your `.env` file exists in the directory Cursor uses as the hook working directory (the project root for project hooks)
-- Check that `LANGFUSE_SECRET_KEY` and `LANGFUSE_PUBLIC_KEY` are set correctly
+- Run `cursor-langfuse configure` and confirm `~/.config/cursor-langfuse/config.json` exists
+- Check that the file contains `secretKey` and `publicKey`, or that `LANGFUSE_SECRET_KEY` and `LANGFUSE_PUBLIC_KEY` are set in the environment Cursor gives the hook
 - Look for error messages in Cursor's developer console or the hook's stderr (`Flush error`)
 
 ### Hook errors in Cursor

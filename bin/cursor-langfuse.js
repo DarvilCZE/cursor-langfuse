@@ -18,6 +18,8 @@
  * @see https://langfuse.com/docs
  */
 
+import { applyUserConfig } from '../src/config.js';
+import { runConfigure } from '../src/configure.js';
 import { readStdin } from '../src/utils.js';
 import { 
   traceHookEvent,
@@ -33,6 +35,7 @@ import { routeHookHandler } from '../src/handlers.js';
 async function main() {
   let exitCode = 0;
   try {
+    await applyUserConfig();
     const input = await readStdin();
     const response = await traceHookEvent(input, (trace, event) =>
       routeHookHandler(event.hook_event_name, trace, event)
@@ -59,5 +62,20 @@ async function main() {
   process.exit(exitCode);
 }
 
-// Run the main function
-main();
+const command = process.argv[2];
+if (command === "configure") {
+  runConfigure(process.argv.slice(3))
+    .then((path) => {
+      console.log(`Saved Langfuse credentials to ${path}`);
+      process.exit(0);
+    })
+    .catch((error) => {
+      console.error(error.message);
+      process.exit(1);
+    });
+} else if (command) {
+  console.error(`Unknown command: ${command}`);
+  process.exit(1);
+} else {
+  main();
+}
