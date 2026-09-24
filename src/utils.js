@@ -2,6 +2,8 @@
  * Utility functions for Cursor Langfuse hooks
  */
 
+import { createHash } from "node:crypto";
+
 /**
  * Read and parse JSON input from stdin
  * Cursor hooks pass data via stdin as JSON
@@ -59,7 +61,8 @@ export function generateTraceName(prompt, model) {
 }
 
 /**
- * Generate a session ID from the workspace and conversation.
+ * Session id for one Cursor conversation.
+ * Each user turn is its own trace, so the session is what groups those turns.
  * @param {string[]} workspaceRoots - Array of workspace root paths
  * @param {string} [conversationId] - Cursor conversation id
  * @returns {string} Session ID
@@ -114,6 +117,12 @@ export function generateTags(hookName, input, existingTags = new Set()) {
     tags.add(modelTag);
   }
   
+  if (input.composer_mode) {
+    tags.add(String(input.composer_mode).toLowerCase().substring(0, 20));
+  }
+  if (input.is_background_agent === true) tags.add('background');
+  if (input.is_background_agent === false) tags.add('interactive');
+
   // Add hook-type specific tags
   switch (hookName) {
     case 'beforeShellExecution':
@@ -135,6 +144,21 @@ export function generateTags(hookName, input, existingTags = new Set()) {
       break;
     case 'afterAgentThought':
       tags.add('thinking');
+      break;
+    case 'postToolUse':
+    case 'postToolUseFailure':
+      tags.add('tool');
+      break;
+    case 'subagentStart':
+    case 'subagentStop':
+      tags.add('subagent');
+      break;
+    case 'preCompact':
+      tags.add('compact');
+      break;
+    case 'sessionStart':
+    case 'sessionEnd':
+      tags.add('session');
       break;
   }
   
@@ -168,31 +192,60 @@ export function determineLevel(status, isBlocked = false) {
  * @param {Array<{old_string: string, new_string: string}>} edits - Array of edits
  * @returns {object} Edit statistics
  */
+function countLines(value) {
+  if (value == null || value === '') return 0;
+  return String(value).split('\n').length;
+}
+
 export function calculateEditStats(edits) {
   if (!edits || !Array.isArray(edits)) {
-    return { editCount: 0, linesAdded: 0, linesRemoved: 0 };
+    return { editCount: 0, linesAdded: 0, linesRemoved: 0, netChange: 0 };
   }
-  
+
   let linesAdded = 0;
   let linesRemoved = 0;
-  
+
   for (const edit of edits) {
-    const oldLines = (edit.old_string || '').split('\n').length;
-    const newLines = (edit.new_string || '').split('\n').length;
-    
-    if (newLines > oldLines) {
-      linesAdded += newLines - oldLines;
-    } else if (oldLines > newLines) {
-      linesRemoved += oldLines - newLines;
-    }
+    const oldText = edit.old_string ?? edit.old_line ?? '';
+    const newText = edit.new_string ?? edit.new_line ?? '';
+    if (oldText === newText) continue;
+    linesRemoved += countLines(oldText);
+    linesAdded += countLines(newText);
   }
-  
+
   return {
     editCount: edits.length,
     linesAdded,
     linesRemoved,
     netChange: linesAdded - linesRemoved,
   };
+}
+
+/**
+ * 16 hex chars, stable for a key, and never equal to the root span id.
+ * @param {string} key
+ * @param {string} [rootSpanId]
+ * @returns {string}
+ */
+export function observationSpanId(key, rootSpanId) {
+  const digest = (seed) => createHash('sha256').update(seed).digest('hex').slice(0, 16);
+  let spanId = digest(String(key));
+  if (spanId === '0000000000000000' || spanId === rootSpanId) {
+    spanId = digest(`span:${key}`);
+  }
+  return spanId;
+}
+
+/**
+ * @param {number} durationMs
+ * @param {number} [now]
+ * @returns {Date | undefined}
+ */
+export function startTimeFromDuration(durationMs, now = Date.now()) {
+  if (typeof durationMs !== 'number' || !Number.isFinite(durationMs) || durationMs <= 0) {
+    return undefined;
+  }
+  return new Date(now - durationMs);
 }
 
 /**

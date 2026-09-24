@@ -8,30 +8,37 @@ Install `cursor-langfuse`, then point the hooks you care about at that command. 
 
 ## Features
 
-- **Full Hook Coverage**: Supports all 12 Cursor hooks (Agent and Tab modes)
-- **Conversation Tracing**: Traces grouped by `conversation_id` for complete session visibility
-- **Workspace Sessions**: Sessions grouped by workspace and conversation id for easy filtering
-- **Dynamic Tags**: Automatic tagging based on activity type (shell, mcp, file-ops, thinking, etc.)
-- **Completion Scores**: Tracks agent completion status and efficiency metrics
-- **Rich Metadata**: Captures edit statistics, durations, file types, and more
+- **Hook coverage**: Agent, Tab, session, tool, subagent, and context-compaction hooks
+- **One trace per turn**: A user message and the tool calls that follow it share a trace. The conversation is the Langfuse session
+- **Typed observations**: Model output is a `generation`, shell and edits are `tool`s, file reads are `retriever`s, and subagents are `agent`s
+- **Scores**: Completion status, tool failures, context-window usage, and how the session ended
+- **Durations**: Thinking, shell, MCP, tool, subagent, and session spans use the hook's duration as their start and end
+- **Stable names**: Observation names stay fixed (`respond`, `execute-shell`, `edit-file`) so dashboards and evaluators keep matching
 - **Non-blocking**: Errors are logged but don't interrupt Cursor operations
 
 ## Supported Hooks
 
-| Hook                   | Description                                   |
-| ---------------------- | --------------------------------------------- |
-| `beforeSubmitPrompt`   | Captures user prompts and attachments         |
-| `afterAgentResponse`   | Records agent responses                       |
-| `afterAgentThought`    | Logs agent thinking/reasoning                 |
-| `beforeShellExecution` | Tracks shell commands before execution        |
-| `afterShellExecution`  | Captures shell command output                 |
-| `beforeMCPExecution`   | Logs MCP tool calls                           |
-| `afterMCPExecution`    | Records MCP tool results                      |
-| `beforeReadFile`       | Tracks file read operations                   |
-| `afterFileEdit`        | Captures file edits with line statistics      |
-| `stop`                 | Records session completion with status scores |
-| `beforeTabFileRead`    | Tab mode file reads                           |
-| `afterTabFileEdit`     | Tab mode file edits                           |
+| Hook                   | Description                                              |
+| ---------------------- | -------------------------------------------------------- |
+| `sessionStart`         | Records composer mode and background vs interactive      |
+| `sessionEnd`           | Records why the session ended and how long it ran       |
+| `beforeSubmitPrompt`   | Stores the user prompt and attachment paths             |
+| `afterAgentResponse`   | Records the assistant message as a generation           |
+| `afterAgentThought`    | Attaches thinking text to the generation, and a `think` span with its duration |
+| `beforeShellExecution` | Allows the command and remembers sandbox state          |
+| `afterShellExecution`  | Records the shell command, output, and duration         |
+| `beforeMCPExecution`   | Allows the call and remembers the MCP server            |
+| `afterMCPExecution`    | Records the MCP tool result and duration                |
+| `beforeReadFile`       | Records the file path and size, not the file body       |
+| `afterFileEdit`        | Records the edit and line statistics                    |
+| `postToolUse`          | Records tools that do not have a dedicated hook         |
+| `postToolUseFailure`   | Records tool failures and scores `tool_failure`         |
+| `subagentStart`        | Opens a subagent observation                            |
+| `subagentStop`         | Closes that subagent with its summary and duration      |
+| `preCompact`           | Records context-window usage before compaction          |
+| `stop`                 | Scores whether the turn completed, aborted, or errored  |
+| `beforeTabFileRead`    | Tab file reads                                          |
+| `afterTabFileEdit`     | Tab file edits                                          |
 
 ## Installation
 
@@ -57,7 +64,7 @@ Register the CLI once in your user hooks:
 cursor-langfuse init
 ```
 
-`init` writes `~/.cursor/hooks.json` and points each supported event at this install of the CLI. That file is user-level configuration, so Cursor applies the same hooks in every project you open. Hooks you already configured are left in place. Running it again updates the `cursor-langfuse` command instead of adding a second one. The event list is the same as [`examples/hooks.json`](examples/hooks.json).
+`init` writes `~/.cursor/hooks.json` and points each supported event at this install of the CLI. That file is user-level configuration, so Cursor applies the same hooks in every project you open. Hooks you already configured are left in place. Running it again adds any supported events that are missing and updates the existing `cursor-langfuse` command instead of adding a second one. The event list is the same as [`examples/hooks.json`](examples/hooks.json).
 
 The CLI reads the hook payload from stdin and prints the hook response on stdout. It fails open: errors are logged to stderr and Cursor is allowed to continue.
 
@@ -93,7 +100,7 @@ One config file sends every workspace to the same Langfuse project. Sessions sta
 
 1. Cursor triggers a hook event and passes JSON data via stdin to `cursor-langfuse`
 2. The CLI loads credentials from the user config file, then reads and parses the input
-3. The `conversation_id` is hashed into a deterministic Langfuse trace id, and the event is recorded on that conversation's root observation
+3. `conversation_id` and `generation_id` are hashed into a deterministic Langfuse trace id, so each user turn is its own trace. The session id stays on the conversation
 4. Session, user, version, tags, and metadata are propagated before any observation is created, so they are present on the root and on every child, including generations that carry token usage
 5. The appropriate handler records spans, generations, and events under that root. Overall prompt and response text are stored on the root observation
 6. Scores are attached to the root observation
@@ -103,13 +110,14 @@ The handler uses the Langfuse JS SDK v5 (`@langfuse/tracing`, `@langfuse/otel`, 
 
 ### Trace Structure
 
-- **Trace**: One per conversation. The trace id is a deterministic hash of `conversation_id`
-- **Root observation**: Holds the conversation input and output. Later hook processes reuse the same root span id
-- **Session**: Grouped by workspace folder name and conversation id, and copied onto every observation
-- **Generations**: User prompts and agent responses. Response generations include token usage
-- **Spans**: File operations, shell commands, MCP calls, thinking
-- **Events**: Session completion markers
-- **Scores**: Completion status (0-1) and efficiency metrics, attached to the root observation
+- **Trace**: One per user turn. The trace id is a deterministic hash of `conversation_id` and `generation_id`. The trace name is `cursor-agent` or `cursor-tab`
+- **Root observation**: Holds that turn's prompt and assistant text. Later hook processes in the same turn reuse the same root span id
+- **Session**: One Cursor conversation, named from the workspace folder and `conversation_id`
+- **Generation** `respond`: The assistant message. Thinking text is metadata on this generation, and a `think` span carries the thinking duration. Token usage is sent only when the hook payload includes it. The model is `model_id` when Cursor sends one
+- **Tool / retriever**: `execute-shell`, `edit-file`, `read-file`, MCP tools, and other tool calls. Duration comes from the hook, so the waterfall shows how long the call took
+- **Agent**: One observation per subagent, updated when the subagent finishes
+- **Events**: `stop-agent`, `compact-context`, `start-session`
+- **Scores**: `completion_status` (0–1), `tool_failure`, `context_usage_percent`, and `session_end`, attached to the root observation
 
 Between hook processes, the latest root input and output are stored under `$TMPDIR/cursor-langfuse-hooks` (override with `CURSOR_LANGFUSE_STATE_DIR`) so a later event can keep both on the root observation. Those files are written with user-only permissions.
 
@@ -117,13 +125,11 @@ Between hook processes, the latest root input and output are stored under `$TMPD
 
 Traces are automatically tagged based on activity:
 
-- `cursor` - All traces
-- `agent` or `tab` - Based on hook source
-- `shell` - Shell command activity
-- `mcp` - MCP tool usage
-- `file-ops` - File read/write operations
-- `thinking` - Agent reasoning captured
-- Model name (e.g., `claude-3-5-sonnet`)
+- `cursor` — all traces
+- `agent` or `tab` — based on hook source
+- `shell`, `mcp`, `file-ops`, `tool`, `subagent`, `thinking`, `compact`, `session` — activity on that turn
+- `agent`, `ask`, or `edit`, plus `background` or `interactive`, when a session hook reports them
+- Model name (for example `claude-opus-4-7`)
 - `status-completed`, `status-aborted`, `status-error`
 
 ## Project Structure

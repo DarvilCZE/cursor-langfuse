@@ -1,6 +1,8 @@
 {
   "version": 1,
   "hooks": {
+    "sessionStart": [{ "command": "cursor-langfuse" }],
+    "sessionEnd": [{ "command": "cursor-langfuse" }],
     "beforeSubmitPrompt": [{ "command": "cursor-langfuse" }],
     "afterAgentResponse": [{ "command": "cursor-langfuse" }],
     "afterAgentThought": [{ "command": "cursor-langfuse" }],
@@ -10,6 +12,11 @@
     "afterMCPExecution": [{ "command": "cursor-langfuse" }],
     "beforeReadFile": [{ "command": "cursor-langfuse" }],
     "afterFileEdit": [{ "command": "cursor-langfuse" }],
+    "postToolUse": [{ "command": "cursor-langfuse" }],
+    "postToolUseFailure": [{ "command": "cursor-langfuse" }],
+    "subagentStart": [{ "command": "cursor-langfuse" }],
+    "subagentStop": [{ "command": "cursor-langfuse" }],
+    "preCompact": [{ "command": "cursor-langfuse" }],
     "stop": [{ "command": "cursor-langfuse" }],
     "beforeTabFileRead": [{ "command": "cursor-langfuse" }],
     "afterTabFileEdit": [{ "command": "cursor-langfuse" }]

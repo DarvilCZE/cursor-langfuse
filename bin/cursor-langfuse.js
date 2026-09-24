@@ -6,12 +6,11 @@
  * CLI entry point. Cursor invokes this command from hooks.json.
  * 
  * Features:
- * - All 12 Cursor hooks supported (Agent + Tab)
- * - Traces grouped by conversation_id
- * - Sessions grouped by workspace and conversation id
- * - Dynamic tags based on activity
- * - Completion scores and efficiency metrics
- * - Rich metadata and edit statistics
+ * - Agent, Tab, session, tool, subagent, and compaction hooks
+ * - One trace per user turn, grouped into a session per conversation
+ * - Generations, tools, retrievers, and subagents as typed observations
+ * - Completion, tool failure, context, and session-end scores
+ * - Edit statistics and real observation durations
  * 
  * @version 1.2.0
  * @see https://cursor.com/docs/agent/hooks

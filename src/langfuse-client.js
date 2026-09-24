@@ -2,10 +2,12 @@
  * Langfuse client for Cursor hooks.
  *
  * Uses the JS/TS SDK v5 observations model. Each hook invocation is a
- * separate short-lived process, so a conversation shares a deterministic
- * trace id and root span id. propagateAttributes runs before any observation
- * is created, so the root and every child (including cost-bearing generations)
- * receive the session id and the other correlating attributes.
+ * separate short-lived process. A user turn (conversation id + generation id)
+ * shares a deterministic trace id and root span id. Turns from the same
+ * conversation share a session id. propagateAttributes runs before any
+ * observation is created, so the root and every child (including
+ * cost-bearing generations) receive the session id and the other
+ * correlating attributes.
  *
  * Overall input and output live on that root observation. Later processes
  * reload the latest input and output from a local state file so a response
@@ -27,8 +29,9 @@ import {
   createTraceId,
   propagateAttributes,
   startActiveObservation,
+  startObservation,
 } from "@langfuse/tracing";
-import { generateSessionId, generateTags, generateTraceName } from "./utils.js";
+import { generateSessionId, generateTags, observationSpanId } from "./utils.js";
 
 export const HOOK_HANDLER_VERSION = "1.2.0";
 
@@ -40,6 +43,7 @@ let langfuseClient = null;
 let tracingStarted = false;
 let activeTraceId = "0123456789abcdef0123456789abcdef";
 let issueRootSpanId = false;
+let reservedChildSpanId = null;
 
 let testing = {
   exporter: null,
@@ -121,6 +125,11 @@ function ensureTracing() {
           issueRootSpanId = false;
           return rootSpanIdForTrace(activeTraceId);
         }
+        if (reservedChildSpanId) {
+          const spanId = reservedChildSpanId;
+          reservedChildSpanId = null;
+          return spanId;
+        }
         return randomSpanId();
       },
     },
@@ -149,24 +158,38 @@ function recordScore(score) {
   getLangfuseClient().score.create(score);
 }
 
-function resolveTraceName(input) {
-  if (input.hook_event_name === "beforeSubmitPrompt" && input.prompt) {
-    return String(input.prompt).substring(0, 100);
+function resolveTraceName(input, storedName) {
+  if (storedName) return storedName;
+  if (String(input.hook_event_name || "").includes("Tab")) return "cursor-tab";
+  return "cursor-agent";
+}
+
+async function resolveTraceId(input) {
+  const conversation = input.conversation_id || input.session_id;
+  if (conversation && input.generation_id) {
+    return createTraceId(`${conversation}:${input.generation_id}`);
   }
-  return (
-    generateTraceName(input.prompt, input.model) ||
-    `${input.hook_event_name || "Cursor"} - ${input.model || "Agent"}`
-  );
+  if (conversation) return createTraceId(String(conversation));
+  return createTraceId();
 }
 
 function propagatedMetadata(input) {
   const metadata = {};
   const cursorVersion = truncatePropagated(input.cursor_version);
-  const model = truncatePropagated(input.model);
+  const model = truncatePropagated(input.model_id || input.model);
   const generationId = truncatePropagated(input.generation_id);
   if (cursorVersion) metadata.cursor_version = cursorVersion;
   if (model) metadata.model = model;
   if (generationId) metadata.generation_id = generationId;
+  if (Array.isArray(input.model_params) && input.model_params.length > 0) {
+    const params = truncatePropagated(
+      input.model_params
+        .filter((item) => item && item.id)
+        .map((item) => `${item.id}=${item.value}`)
+        .join(",")
+    );
+    if (params) metadata.model_params = params;
+  }
   if (Array.isArray(input.workspace_roots) && input.workspace_roots.length > 0) {
     const roots = truncatePropagated(input.workspace_roots.join(","));
     if (roots) metadata.workspace_roots = roots;
@@ -222,7 +245,16 @@ async function readRootState(directory, traceId) {
 }
 
 async function writeRootState(directory, traceId, state) {
-  const payload = { startedAt: state.startedAt };
+  const payload = {
+    startedAt: state.startedAt,
+    traceName: state.traceName,
+    tags: state.tags,
+    attachments: state.attachments,
+    observations: state.observations,
+    pendingSubagents: state.pendingSubagents,
+    sandboxByCommand: state.sandboxByCommand,
+    mcpServers: state.mcpServers,
+  };
   if (state.input !== undefined) payload.input = state.input;
   if (state.output !== undefined) payload.output = state.output;
   const target = join(directory, `${traceId}.json`);
@@ -231,7 +263,34 @@ async function writeRootState(directory, traceId, state) {
   await rename(temporary, target);
 }
 
-function createFacade(root, io, openObservations) {
+function emptyTurnState(stored, startedAt) {
+  return {
+    startedAt: startedAt.toISOString(),
+    input: stored.input,
+    output: stored.output,
+    traceName: stored.traceName,
+    tags: Array.isArray(stored.tags) ? stored.tags : [],
+    attachments: stored.attachments,
+    observations:
+      stored.observations && typeof stored.observations === "object"
+        ? stored.observations
+        : {},
+    pendingSubagents:
+      stored.pendingSubagents && typeof stored.pendingSubagents === "object"
+        ? stored.pendingSubagents
+        : {},
+    sandboxByCommand:
+      stored.sandboxByCommand && typeof stored.sandboxByCommand === "object"
+        ? stored.sandboxByCommand
+        : {},
+    mcpServers:
+      stored.mcpServers && typeof stored.mcpServers === "object"
+        ? stored.mcpServers
+        : {},
+  };
+}
+
+function createFacade(root, state, openObservations) {
   const track = (observation) => {
     openObservations.push(observation);
     return observation;
@@ -240,6 +299,7 @@ function createFacade(root, io, openObservations) {
   return {
     traceId: root.traceId,
     observationId: root.id,
+    state,
     update(fields = {}) {
       if (fields.name) {
         const name = String(fields.name);
@@ -251,53 +311,48 @@ function createFacade(root, io, openObservations) {
       }
       const patch = {};
       if (fields.input !== undefined) {
-        io.input = fields.input;
+        state.input = fields.input;
         patch.input = fields.input;
       }
       if (fields.output !== undefined) {
-        io.output = fields.output;
+        state.output = fields.output;
         patch.output = fields.output;
       }
       if (Object.keys(patch).length > 0) root.update(patch);
     },
-    generation(fields) {
-      const { name, ...attributes } = fields;
-      const generation = track(
-        root.startObservation(name, attributes, { asType: "generation" })
-      );
-      return {
-        span(childFields) {
-          const { name: childName, ...childAttributes } = childFields;
-          const child = track(
-            generation.startObservation(childName, childAttributes, {
-              asType: "span",
-            })
-          );
-          return {
-            end() {
-              child.end();
-            },
-          };
-        },
-        end() {
-          generation.end();
-        },
-      };
-    },
-    span(fields) {
-      const { name, ...attributes } = fields;
-      const span = track(
-        root.startObservation(name, attributes, { asType: "span" })
+    observation(fields) {
+      const {
+        name,
+        asType = "span",
+        startTime,
+        spanKey,
+        ...attributes
+      } = fields;
+      const clean = {};
+      for (const [key, value] of Object.entries(attributes)) {
+        if (value !== undefined) clean[key] = value;
+      }
+      if (spanKey) {
+        reservedChildSpanId = observationSpanId(
+          `${root.traceId}:${spanKey}`,
+          root.id
+        );
+      }
+      const child = track(
+        startObservation(name, clean, {
+          asType,
+          parentSpanContext: root.otelSpan.spanContext(),
+          ...(startTime ? { startTime } : {}),
+        })
       );
       return {
         end() {
-          span.end();
+          child.end();
         },
       };
     },
     event(fields) {
-      const { name, ...attributes } = fields;
-      track(root.startObservation(name, attributes, { asType: "event" }));
+      this.observation({ ...fields, asType: "event" });
     },
     score(name, value, comment = undefined, dataType = "NUMERIC") {
       recordScore({
@@ -335,40 +390,34 @@ export function addCompletionScores(trace, input) {
   }
 
   trace.score("completion_status", statusScore, statusComment);
-
-  if (typeof input.loop_count === "number") {
-    const efficiencyScore = Math.max(0, 1 - input.loop_count / 10);
-    trace.score(
-      "efficiency",
-      efficiencyScore,
-      `Completed in ${input.loop_count} loops`
-    );
-  }
 }
 
 export async function traceHookEvent(input, handleEvent) {
   ensureTracing();
 
-  const traceId = input.conversation_id
-    ? await createTraceId(String(input.conversation_id))
-    : await createTraceId();
+  const traceId = await resolveTraceId(input);
   activeTraceId = traceId;
 
   return withStateLock(traceId, async (directory) => {
     const stored = await readRootState(directory, traceId);
     const startedAt = stored.startedAt ? new Date(stored.startedAt) : new Date();
-    const io = {
-      input: stored.input,
-      output: stored.output,
-    };
-    const traceName = truncatePropagated(resolveTraceName(input)) || "Cursor";
+    const state = emptyTurnState(stored, startedAt);
+    const traceName =
+      truncatePropagated(resolveTraceName(input, state.traceName)) || "cursor-agent";
+    state.traceName = traceName;
     const sessionId = truncatePropagated(
-      generateSessionId(input.workspace_roots, input.conversation_id)
+      generateSessionId(
+        input.workspace_roots,
+        input.conversation_id || input.session_id
+      )
     );
     const userId = truncatePropagated(input.user_email);
     const version = truncatePropagated(input.cursor_version);
     const metadata = propagatedMetadata(input);
-    const tags = propagationTags(input);
+    const tags = [
+      ...new Set([...(state.tags || []), ...propagationTags(input)]),
+    ];
+    state.tags = tags;
     const openObservations = [];
 
     issueRootSpanId = true;
@@ -387,22 +436,18 @@ export async function traceHookEvent(input, handleEvent) {
             traceName,
             async (root) => {
               const restored = {};
-              if (io.input !== undefined) restored.input = io.input;
-              if (io.output !== undefined) restored.output = io.output;
+              if (state.input !== undefined) restored.input = state.input;
+              if (state.output !== undefined) restored.output = state.output;
               if (Object.keys(restored).length > 0) root.update(restored);
 
-              const facade = createFacade(root, io, openObservations);
+              const facade = createFacade(root, state, openObservations);
               try {
                 return handleEvent ? handleEvent(facade, input) : null;
               } finally {
                 for (const observation of openObservations) {
                   observation.end();
                 }
-                await writeRootState(directory, traceId, {
-                  input: io.input,
-                  output: io.output,
-                  startedAt: startedAt.toISOString(),
-                });
+                await writeRootState(directory, traceId, state);
               }
             },
             { startTime: startedAt }
