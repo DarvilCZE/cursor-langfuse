@@ -1,6 +1,5 @@
 # Dependencies
 node_modules/
-.cursor/hooks/node_modules/
 
 # Environment variables (contains secrets)
 .env

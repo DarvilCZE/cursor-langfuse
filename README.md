@@ -61,8 +61,6 @@ cursor-langfuse init
 
 The CLI reads the hook payload from stdin and prints the hook response on stdout. It fails open: errors are logged to stderr and Cursor is allowed to continue.
 
-This repository still contains `.cursor/hooks.json` wired to the previous in-tree handler, so tracing keeps running here. That file is local configuration, not part of the package you install.
-
 ## Configuration
 
 Credentials live in `~/.config/cursor-langfuse/config.json`:
