@@ -2,14 +2,6 @@
 
 A Cursor hooks integration that sends traces to Langfuse for observability and debugging of AI coding sessions.
 
-## The Christmas Card
-
-You might notice `xmas.js` and `xmas.html` in the repo. These are the totally serious, mission-critical test artifacts we used to verify the Langfuse integration was working correctly.
-
-Nothing says "production-ready observability tooling" like an interactive Christmas card with falling snow, draggable presents, a shakeable tree, flying Santa, and Jingle Bells playing through the Web Audio API.
-
-It worked. The traces looked great. Happy holidays.
-
 ## Overview
 
 This project enables automatic tracing of Cursor AI agent activity to Langfuse. Every prompt, response, file edit, shell command, and MCP tool call is captured and sent to Langfuse for analysis.
@@ -26,20 +18,20 @@ This project enables automatic tracing of Cursor AI agent activity to Langfuse. 
 
 ## Supported Hooks
 
-| Hook | Description |
-|------|-------------|
-| `beforeSubmitPrompt` | Captures user prompts and attachments |
-| `afterAgentResponse` | Records agent responses |
-| `afterAgentThought` | Logs agent thinking/reasoning |
-| `beforeShellExecution` | Tracks shell commands before execution |
-| `afterShellExecution` | Captures shell command output |
-| `beforeMCPExecution` | Logs MCP tool calls |
-| `afterMCPExecution` | Records MCP tool results |
-| `beforeReadFile` | Tracks file read operations |
-| `afterFileEdit` | Captures file edits with line statistics |
-| `stop` | Records session completion with status scores |
-| `beforeTabFileRead` | Tab mode file reads |
-| `afterTabFileEdit` | Tab mode file edits |
+| Hook                   | Description                                   |
+| ---------------------- | --------------------------------------------- |
+| `beforeSubmitPrompt`   | Captures user prompts and attachments         |
+| `afterAgentResponse`   | Records agent responses                       |
+| `afterAgentThought`    | Logs agent thinking/reasoning                 |
+| `beforeShellExecution` | Tracks shell commands before execution        |
+| `afterShellExecution`  | Captures shell command output                 |
+| `beforeMCPExecution`   | Logs MCP tool calls                           |
+| `afterMCPExecution`    | Records MCP tool results                      |
+| `beforeReadFile`       | Tracks file read operations                   |
+| `afterFileEdit`        | Captures file edits with line statistics      |
+| `stop`                 | Records session completion with status scores |
+| `beforeTabFileRead`    | Tab mode file reads                           |
+| `afterTabFileEdit`     | Tab mode file edits                           |
 
 ## Installation
 
@@ -66,11 +58,11 @@ LANGFUSE_BASE_URL=https://cloud.langfuse.com
 
 ### Environment Variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `LANGFUSE_SECRET_KEY` | Yes | Your Langfuse secret key |
-| `LANGFUSE_PUBLIC_KEY` | Yes | Your Langfuse public key |
-| `LANGFUSE_BASE_URL` | No | Langfuse API URL (defaults to `https://cloud.langfuse.com`) |
+| Variable              | Required | Description                                                 |
+| --------------------- | -------- | ----------------------------------------------------------- |
+| `LANGFUSE_SECRET_KEY` | Yes      | Your Langfuse secret key                                    |
+| `LANGFUSE_PUBLIC_KEY` | Yes      | Your Langfuse public key                                    |
+| `LANGFUSE_BASE_URL`   | No       | Langfuse API URL (defaults to `https://cloud.langfuse.com`) |
 
 ### Hooks Configuration
 
@@ -150,6 +142,7 @@ Traces are automatically tagged based on activity:
 ### Hook errors in Cursor
 
 The handler is designed to fail gracefully. If an error occurs:
+
 - The error is logged to stderr
 - A permissive response (`{ "continue": true, "permission": "allow" }`) is returned
 - Cursor operations are not blocked
