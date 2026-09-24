@@ -295,22 +295,24 @@ export function handleAfterTabFileEdit(trace, input) {
   return null;
 }
 
-export function routeHookHandler(hookName, trace, input) {
-  const handlers = {
-    beforeSubmitPrompt: handleBeforeSubmitPrompt,
-    afterAgentResponse: handleAfterAgentResponse,
-    afterAgentThought: handleAfterAgentThought,
-    beforeShellExecution: handleBeforeShellExecution,
-    afterShellExecution: handleAfterShellExecution,
-    beforeMCPExecution: handleBeforeMCPExecution,
-    afterMCPExecution: handleAfterMCPExecution,
-    beforeReadFile: handleBeforeReadFile,
-    afterFileEdit: handleAfterFileEdit,
-    stop: handleStop,
-    beforeTabFileRead: handleBeforeTabFileRead,
-    afterTabFileEdit: handleAfterTabFileEdit,
-  };
+const handlers = {
+  beforeSubmitPrompt: handleBeforeSubmitPrompt,
+  afterAgentResponse: handleAfterAgentResponse,
+  afterAgentThought: handleAfterAgentThought,
+  beforeShellExecution: handleBeforeShellExecution,
+  afterShellExecution: handleAfterShellExecution,
+  beforeMCPExecution: handleBeforeMCPExecution,
+  afterMCPExecution: handleAfterMCPExecution,
+  beforeReadFile: handleBeforeReadFile,
+  afterFileEdit: handleAfterFileEdit,
+  stop: handleStop,
+  beforeTabFileRead: handleBeforeTabFileRead,
+  afterTabFileEdit: handleAfterTabFileEdit,
+};
 
+export const HOOK_EVENT_NAMES = Object.keys(handlers);
+
+export function routeHookHandler(hookName, trace, input) {
   const handler = handlers[hookName];
   if (!handler) {
     console.error(`Unknown hook type: ${hookName}`);

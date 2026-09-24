@@ -51,20 +51,13 @@ cursor-langfuse configure --secret-key sk-lf-... --public-key pk-lf-...
 
 Omit the flags to be prompted. Add `--base-url https://your-host` for a self-hosted Langfuse. Pressing Enter for the base URL uses `https://cloud.langfuse.com`.
 
-Register the command in your user hooks file, `~/.cursor/hooks.json`. User hooks run for every project. A full example is in [`examples/hooks.json`](examples/hooks.json). Omit any event you do not want to record:
+Register the CLI once in your user hooks:
 
-```json
-{
-  "version": 1,
-  "hooks": {
-    "beforeSubmitPrompt": [{ "command": "cursor-langfuse" }],
-    "afterAgentResponse": [{ "command": "cursor-langfuse" }],
-    "stop": [{ "command": "cursor-langfuse" }]
-  }
-}
+```bash
+cursor-langfuse init
 ```
 
-Cursor resolves the command like a shell. If the hook reports that `cursor-langfuse` cannot be found, use the absolute path from `command -v cursor-langfuse`.
+`init` writes `~/.cursor/hooks.json` and points each supported event at this install of the CLI. That file is user-level configuration, so Cursor applies the same hooks in every project you open. Hooks you already configured are left in place. Running it again updates the `cursor-langfuse` command instead of adding a second one. The event list is the same as [`examples/hooks.json`](examples/hooks.json).
 
 The CLI reads the hook payload from stdin and prints the hook response on stdout. It fails open: errors are logged to stderr and Cursor is allowed to continue.
 
@@ -143,7 +136,7 @@ src/
   langfuse-client.js      # Langfuse SDK wrapper
   handlers.js             # Hook-specific handlers
   utils.js                # Utility functions
-examples/hooks.json       # Sample user hooks file (~/.cursor/hooks.json)
+examples/hooks.json       # Events that `cursor-langfuse init` registers
 ```
 
 ## Viewing Traces

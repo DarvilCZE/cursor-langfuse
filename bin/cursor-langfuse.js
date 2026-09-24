@@ -20,6 +20,7 @@
 
 import { applyUserConfig } from '../src/config.js';
 import { runConfigure } from '../src/configure.js';
+import { runInit } from '../src/init.js';
 import { readStdin } from '../src/utils.js';
 import { 
   traceHookEvent,
@@ -67,6 +68,19 @@ if (command === "configure") {
   runConfigure(process.argv.slice(3))
     .then((path) => {
       console.log(`Saved Langfuse credentials to ${path}`);
+      process.exit(0);
+    })
+    .catch((error) => {
+      console.error(error.message);
+      process.exit(1);
+    });
+} else if (command === "init") {
+  runInit({ argv: process.argv.slice(3) })
+    .then(({ hooksPath, needsConfigure }) => {
+      console.log(`Registered cursor-langfuse in ${hooksPath}`);
+      if (needsConfigure) {
+        console.log("Run cursor-langfuse configure to save your Langfuse keys.");
+      }
       process.exit(0);
     })
     .catch((error) => {
