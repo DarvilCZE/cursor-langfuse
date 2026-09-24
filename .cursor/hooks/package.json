@@ -5,11 +5,16 @@
   "type": "module",
   "main": "hook-handler.js",
   "scripts": {
-    "test": "node hook-handler.js"
+    "test": "node --test"
   },
   "dependencies": {
-    "dotenv": "^16.4.5",
-    "langfuse": "^3.30.0"
+    "@langfuse/client": "^5.11.1",
+    "@langfuse/otel": "^5.11.1",
+    "@langfuse/tracing": "^5.11.1",
+    "@opentelemetry/sdk-node": "^0.222.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@opentelemetry/sdk-trace-base": "^2.8.0"
   }
 }
-

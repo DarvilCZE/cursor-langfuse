@@ -60,9 +60,12 @@ LANGFUSE_BASE_URL=https://cloud.langfuse.com
 
 | Variable              | Required | Description                                                 |
 | --------------------- | -------- | ----------------------------------------------------------- |
-| `LANGFUSE_SECRET_KEY` | Yes      | Your Langfuse secret key                                    |
-| `LANGFUSE_PUBLIC_KEY` | Yes      | Your Langfuse public key                                    |
-| `LANGFUSE_BASE_URL`   | No       | Langfuse API URL (defaults to `https://cloud.langfuse.com`) |
+| `LANGFUSE_SECRET_KEY`           | Yes      | Your Langfuse secret key                                    |
+| `LANGFUSE_PUBLIC_KEY`           | Yes      | Your Langfuse public key                                    |
+| `LANGFUSE_BASE_URL`             | No       | Langfuse API URL (defaults to `https://cloud.langfuse.com`) |
+| `LANGFUSE_RELEASE`              | No       | Release stamped on observations (defaults to the hook handler version) |
+| `LANGFUSE_TRACING_ENVIRONMENT`  | No       | Langfuse environment, when you want one                     |
+| `CURSOR_LANGFUSE_STATE_DIR`     | No       | Directory for the local root input/output cache             |
 
 ### Hooks Configuration
 
@@ -83,19 +86,25 @@ The `.cursor/hooks.json` file registers the hook handler for all supported event
 
 1. Cursor triggers a hook event and passes JSON data via stdin
 2. The hook handler reads and parses the input
-3. A Langfuse trace is created or updated using the `conversation_id`
-4. The appropriate handler processes the event and creates spans/generations
-5. Scores and tags are applied based on activity
-6. Events are flushed to Langfuse before the handler exits
+3. The `conversation_id` is hashed into a deterministic Langfuse trace id, and the event is recorded on that conversation's root observation
+4. Session, user, version, tags, and metadata are propagated before any observation is created, so they are present on the root and on every child, including generations that carry token usage
+5. The appropriate handler records spans, generations, and events under that root. Overall prompt and response text are stored on the root observation
+6. Scores are attached to the root observation
+7. The process flushes the OpenTelemetry exporter and the score queue, then shuts them down before exiting
+
+The handler uses the Langfuse JS SDK v5 (`@langfuse/tracing`, `@langfuse/otel`, and `@langfuse/client`) and exports traces with OTLP to `{LANGFUSE_BASE_URL}/api/public/otel/v1/traces`. That path requires Langfuse Cloud or a self-hosted Langfuse v4 server.
 
 ### Trace Structure
 
-- **Trace**: One per conversation, identified by `conversation_id`
-- **Session**: Grouped by workspace folder name
-- **Generations**: User prompts and agent responses
+- **Trace**: One per conversation. The trace id is a deterministic hash of `conversation_id`
+- **Root observation**: Holds the conversation input and output. Later hook processes reuse the same root span id
+- **Session**: Grouped by workspace folder name and copied onto every observation
+- **Generations**: User prompts and agent responses. Response generations include token usage
 - **Spans**: File operations, shell commands, MCP calls, thinking
 - **Events**: Session completion markers
-- **Scores**: Completion status (0-1) and efficiency metrics
+- **Scores**: Completion status (0-1) and efficiency metrics, attached to the root observation
+
+Between hook processes, the latest root input and output are stored under `$TMPDIR/cursor-langfuse-hooks` (override with `CURSOR_LANGFUSE_STATE_DIR`) so a later event can keep both on the root observation. Those files are written with user-only permissions.
 
 ### Automatic Tagging
 
@@ -137,7 +146,7 @@ Traces are automatically tagged based on activity:
 
 - Verify your `.env` file exists in the project root
 - Check that `LANGFUSE_SECRET_KEY` and `LANGFUSE_PUBLIC_KEY` are set correctly
-- Look for error messages in Cursor's developer console
+- Look for error messages in Cursor's developer console or the hook's stderr (`Flush error`)
 
 ### Hook errors in Cursor
 

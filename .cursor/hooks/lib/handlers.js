@@ -8,9 +8,8 @@ import {
   getFileExtension,
   formatDuration,
   determineLevel,
-  generateTags,
 } from "./utils.js";
-import { addCompletionScores, addTagsToTrace } from "./langfuse-client.js";
+import { addCompletionScores } from "./langfuse-client.js";
 
 export function handleBeforeSubmitPrompt(trace, input) {
   trace.update({
@@ -48,6 +47,7 @@ export function handleBeforeSubmitPrompt(trace, input) {
     }
   }
 
+  generation.end();
   return { continue: true };
 }
 
@@ -79,7 +79,7 @@ export function handleAfterAgentResponse(trace, input) {
       cache_read_tokens: cacheReadTokens,
       cache_write_tokens: cacheWriteTokens,
     },
-  });
+  }).end();
 
   return null;
 }
@@ -99,7 +99,6 @@ export function handleAfterAgentThought(trace, input) {
     })
     .end();
 
-  addTagsToTrace(trace, generateTags("afterAgentThought", input));
   return null;
 }
 
@@ -115,7 +114,6 @@ export function handleBeforeShellExecution(trace, input) {
     })
     .end();
 
-  addTagsToTrace(trace, generateTags("beforeShellExecution", input));
   return { permission: "allow" };
 }
 
@@ -159,7 +157,6 @@ export function handleBeforeMCPExecution(trace, input) {
     })
     .end();
 
-  addTagsToTrace(trace, generateTags("beforeMCPExecution", input));
   return { permission: "allow" };
 }
 
@@ -202,7 +199,6 @@ export function handleBeforeReadFile(trace, input) {
     })
     .end();
 
-  addTagsToTrace(trace, generateTags("beforeReadFile", input));
   return { permission: "allow" };
 }
 
@@ -247,7 +243,6 @@ export function handleStop(trace, input) {
   });
 
   addCompletionScores(trace, input);
-  addTagsToTrace(trace, [`status-${input.status}`]);
 
   return {};
 }
